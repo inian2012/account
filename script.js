@@ -62,8 +62,6 @@ document.addEventListener('DOMContentLoaded', () => {
         mobileMenuBtn: document.getElementById('mobile-menu-btn'),
         
         // Trash UI
-        trashCategoryBtn: document.getElementById('trash-category-btn'),
-        trashCount: document.getElementById('trash-count'),
         emptyTrashBtn: document.getElementById('empty-trash-btn'),
         deleteCategoryBtn: document.getElementById('delete-category-btn'),
         
@@ -494,15 +492,23 @@ document.addEventListener('DOMContentLoaded', () => {
             dom.categoryList.appendChild(li);
         });
         
-        // Active state for trash
-        if (state.currentCategoryId === 'trash') {
-            dom.trashCategoryBtn.classList.add('active');
-        } else {
-            dom.trashCategoryBtn.classList.remove('active');
-        }
+        // Append Divider
+        const divider = document.createElement('div');
+        divider.className = 'category-divider';
+        dom.categoryList.appendChild(divider);
         
-        // Update trash count
-        dom.trashCount.textContent = state.trash.length;
+        // Append Trash Category
+        const trashLi = document.createElement('li');
+        trashLi.className = `category-item special-category ${state.currentCategoryId === 'trash' ? 'active' : ''}`;
+        trashLi.innerHTML = `<i class="fa-solid fa-trash-can"></i> 回收站 <span class="badge" style="margin-left:auto;">${state.trash.length}</span>`;
+        trashLi.onclick = () => {
+            state.currentCategoryId = 'trash';
+            state.currentCardIndex = 0;
+            saveData();
+            closeMobileSidebar();
+            render();
+        };
+        dom.categoryList.appendChild(trashLi);
     }
 
     function renderMainHeader() {
@@ -775,22 +781,18 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         // Sidebar Actions
-        dom.trashCategoryBtn.addEventListener('click', () => {
-            state.currentCategoryId = 'trash';
-            state.currentCardIndex = 0;
-            saveData();
-            closeMobileSidebar();
-            render();
-        });
         dom.addCategoryBtn.addEventListener('click', () => {
+            closeMobileSidebar();
             dom.newCategoryInput.value = '';
             openModal(dom.categoryModal);
             dom.newCategoryInput.focus();
         });
         dom.exportImportBtn.addEventListener('click', () => {
+            closeMobileSidebar();
             openModal(dom.backupModal);
         });
         dom.syncSettingsBtn.addEventListener('click', () => {
+            closeMobileSidebar(); // Important: clear modal z-index overlap
             dom.githubTokenInput.value = githubToken;
             dom.githubGistIdInput.value = githubGistId;
             dom.syncErrorMsg.textContent = '';
