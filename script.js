@@ -12,6 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let githubToken = localStorage.getItem(GITHUB_TOKEN_KEY) || '';
     let githubGistId = localStorage.getItem(GITHUB_GIST_ID_KEY) || '';
     let isSyncing = false;
+    let syncQueued = false; // Queue indicator for rapid changes
     
     // Default Data Structure
     let state = {
@@ -55,6 +56,8 @@ document.addEventListener('DOMContentLoaded', () => {
         syncSettingsBtn: document.getElementById('sync-settings-btn'),
         syncStatus: document.getElementById('sync-status'),
         syncStatusText: document.querySelector('#sync-status .status-text'),
+        githubLatency: document.querySelector('#github-latency span'),
+        githubLatencyIcon: document.querySelector('#github-latency i'),
         githubTokenInput: document.getElementById('github-token'),
         githubGistIdInput: document.getElementById('github-gist-id'),
         saveSyncBtn: document.getElementById('save-sync-btn'),
@@ -101,6 +104,8 @@ document.addEventListener('DOMContentLoaded', () => {
         loadTheme();
         bindEvents();
         updateSyncStatusUI();
+        startPingGitHub(); // Start latency checker
+        
         if (githubToken && githubGistId) {
             fetchFromCloud(true);
         } else {
@@ -162,6 +167,44 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 3000);
     }
 
+    // --- Network Latency Check ---
+    function startPingGitHub() {
+        if (!dom.githubLatency) return;
+        
+        function ping() {
+            const start = Date.now();
+            const img = new Image();
+            img.onload = () => {
+                const latency = Date.now() - start;
+                updateLatencyUI(latency);
+            };
+            img.onerror = () => {
+                updateLatencyUI(-1); // Failed
+            };
+            // Fetch small static asset to avoid API rate limits
+            img.src = 'https://github.githubassets.com/favicon.ico?_t=' + start;
+        }
+
+        ping(); // Run immediately
+        setInterval(ping, 10000); // Check every 10 seconds
+    }
+
+    function updateLatencyUI(latency) {
+        if (latency === -1) {
+            dom.githubLatency.textContent = '超时/断网';
+            dom.githubLatencyIcon.style.color = 'var(--danger-color)';
+        } else {
+            dom.githubLatency.textContent = latency + ' ms';
+            if (latency <= 150) {
+                dom.githubLatencyIcon.style.color = '#10b981'; // Emerald/Green - Good
+            } else if (latency <= 400) {
+                dom.githubLatencyIcon.style.color = '#f59e0b'; // Amber/Yellow - Moderate
+            } else {
+                dom.githubLatencyIcon.style.color = 'var(--danger-color)'; // Red - Slow
+            }
+        }
+    }
+
     // --- Cloud Sync Logic ---
     function updateSyncStatusUI(statusStr = null) {
         if (!githubToken) {
@@ -183,7 +226,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function syncToCloud() {
-        if (!githubToken || !githubGistId || isSyncing) return;
+        if (!githubToken || !githubGistId) return;
+        
+        if (isSyncing) {
+            syncQueued = true;
+            return;
+        }
         
         isSyncing = true;
         updateSyncStatusUI('syncing');
@@ -213,6 +261,11 @@ document.addEventListener('DOMContentLoaded', () => {
             updateSyncStatusUI('error');
         } finally {
             isSyncing = false;
+            // If another change happened while we were syncing, trigger sync again
+            if (syncQueued) {
+                syncQueued = false;
+                syncToCloud();
+            }
         }
     }
 
